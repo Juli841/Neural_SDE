@@ -4,3 +4,8 @@ __pycache__/
 data/raw/*
 data/processed/*
 !data/*/.gitkeep
+.idea/
+
+*-pycharm-support-libs/
+
+LOG.md

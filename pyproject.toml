@@ -3,7 +3,16 @@ name = "scenario-lab"
 version = "0.1.0"
 description = "Neural SDEs for interest-rate scenario generation and liability risk"
 requires-python = ">=3.12"
-dependencies = ["numpy", "pandas", "scipy", "scikit-learn", "matplotlib", "jupyter", "requests"]
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "scikit-learn",
+    "matplotlib",
+    "jupyter",
+    "requests",
+    "statsmodels>=0.15.0",
+]
 
 [dependency-groups]
 dev = ["pytest"]
