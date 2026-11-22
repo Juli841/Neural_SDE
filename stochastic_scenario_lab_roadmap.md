@@ -60,7 +60,17 @@ Test the classical generator on historical periods not used for calibration. Com
 
 **Deliverable:** A defensible baseline report and an end-to-end working research application in Python.
 
-**Decision point:** What deficiencies, if any, justify introducing a neural SDE?
+**Decision point:** What deficiencies, if any, justify introducing time-varying volatility (M4.5) and then a neural SDE?
+
+### M4.5 — GARCH(1,1) volatility baseline
+
+**Estimated effort:** 2–3 sessions
+
+Add time-varying volatility to the classical generator: GARCH(1,1) per PCA factor with Student-t shocks, simulating from the current conditional volatility at the forecast origin. Re-run the M4 validation (single cut and expanding window) and compare coverage with the constant-volatility baseline.
+
+**Deliverable:** A volatility-clustering baseline, and a validation comparison showing what time-varying volatility fixes (calm and turbulent regimes) and what it leaves open (for example mean reversion at the long end).
+
+**Decision point:** Is the remaining gap large enough to justify a neural SDE?
 
 ### M5 — Neural SDE
 

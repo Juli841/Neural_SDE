@@ -30,7 +30,7 @@ def fit(changes: pd.DataFrame, k: int = 3) -> Params:
     _, V, _ = fit_pca(changes.values, k)
     scores = changes.values @ V
     X = scores[:-1] # yesterday's values
-    Y = scores[1:] #today's values
+    Y = scores[1:] # today's values
 
     phi_t = np.linalg.inv(X.T @ X) @ (X.T @ Y)
     epsilon_hat = Y - X @ phi_t
@@ -63,25 +63,37 @@ def simulate(p: Params, y0: np.ndarray, n_paths: int = N_PATHS, n_days: int = N_
 # ---- M4 validation helpers (not needed for M2, except theory_check) ----
 # fit on <= FIT_END, simulate from the curve at FIT_END, compare with later data
 
-def horizon_quantiles(curves: np.ndarray, h: int = N_DAYS, qs=(0.05, 0.25, 0.5, 0.75, 0.95)) -> pd.DataFrame:
+def horizon_quantiles(curves: np.ndarray, h: int = N_DAYS, qs=(0.05, 0.25, 0.5, 0.75, 0.95), maturities = ("1Y", "2Y", "5Y", "10Y", "20Y", "30Y")) -> pd.DataFrame:
     """Check 1 (simulated side): quantiles of curves[:, h] - curves[:, 0] per maturity."""
-    raise NotImplementedError
+    change = curves[:, h] - curves[:, 0]
+    quantiles = np.quantile(change, qs, axis = 0)
+    return pd.DataFrame(index = qs, columns = maturities, data = quantiles)
 
 
 def realised_changes(levels: pd.DataFrame, h: int = N_DAYS) -> pd.DataFrame:
     """Check 1 (realised side): overlapping h-day changes levels.shift(-h) - levels, dropna."""
-    raise NotImplementedError
+    return (levels.shift(-h) - levels).dropna()
 
 
 def coverage(sim_changes: np.ndarray, realised: pd.DataFrame, lo: float = 0.05, hi: float = 0.95) -> pd.Series:
     """Check 2: per maturity, fraction of realised changes inside the simulated [lo, hi] band."""
-    raise NotImplementedError
+    lows = np.quantile(sim_changes, lo, axis = 0)
+    highs = np.quantile(sim_changes, hi, axis = 0)
+    vals = realised.values
+    counts = np.mean(((vals >= lows) & (vals <= highs)),axis = 0)
+    return pd.Series(counts, index = realised.columns, name = "coverage")
 
 
 def daily_moments(daily_changes: np.ndarray) -> dict:
     """Check 3: std, excess kurtosis and correlation matrix of daily changes. Call on simulated and on actual."""
-    raise NotImplementedError
-
+    std = daily_changes.std(axis = 0)
+    excess_kurt = stats.kurtosis(daily_changes, axis = 0)
+    cor = np.corrcoef(daily_changes, rowvar = False)
+    return {
+        "std": std,
+        "excess_kurt": excess_kurt,
+        "corr_matrix": cor
+    }
 
 def theory_check(p: Params, curves: np.ndarray, h: int = 5) -> pd.DataFrame:
     """Check 4: simulated mean/variance of the factor state after h days vs the VAR(1) closed form
@@ -91,7 +103,9 @@ def theory_check(p: Params, curves: np.ndarray, h: int = 5) -> pd.DataFrame:
     mean = np.mean(S[:, h-1], axis = 0)
     std = np.std(S[:, h-1], axis = 0)
     C = np.zeros(shape = (len(p.sigma), len(p.sigma)))
+
     for t in range(h):
         C = p.Phi @ C @ p.Phi.T + np.diag(p.sigma ** 2)
     theory_std = np.sqrt(np.diag(C))
+
     return pd.DataFrame({"theory mean": np.zeros(shape = mean.shape), "sim_mean" :mean,"theory std": theory_std, "sim_std": std})
