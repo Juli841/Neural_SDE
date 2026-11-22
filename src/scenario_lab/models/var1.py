@@ -1,4 +1,4 @@
-"""M2 baseline scenario generator: 3-factor PCA + VAR(1) on daily factor changes + independent Student-t shocks.
+"""var1: baseline scenario generator: 3-factor PCA + VAR(1) on daily factor changes + independent Student-t shocks.
 
 Decisions are in LOG.md. Zero drift, no mean reversion, factors-only reconstruction.
 """
@@ -9,7 +9,6 @@ from scipy import stats
 import numpy as np
 import pandas as pd
 
-FIT_END = "2018-12-31"   # validation fit uses data up to here; production fit uses everything
 N_PATHS, N_DAYS = 25_000, 250
 MIN_DF = 3.0             # floor so the variance stays finite
 
@@ -50,50 +49,25 @@ def simulate(p: Params, y0: np.ndarray, n_paths: int = N_PATHS, n_days: int = N_
     """
     rng = np.random.default_rng(seed)
     k = p.V.shape[1]
-    s_t = np.zeros((n_paths, k))
     eps = p.sigma * np.sqrt((p.df - 2) / p.df) * stats.t.rvs(p.df, size=(n_paths, n_days, k), random_state=rng)
+    return curves_from_shocks(p.Phi, p.V, y0, eps)
+
+
+def curves_from_shocks(Phi: np.ndarray, V: np.ndarray, y0: np.ndarray, eps: np.ndarray) -> np.ndarray:
+    """Shared by the var1 and var1_garch generators. eps: (n_paths, n_days, k) factor shocks.
+    s_t = Phi @ s_{t-1} + eps_t from s_0 = 0, curve_t = curve_{t-1} + V @ s_t.
+    Returns curves (n_paths, n_days + 1, n_mats); [:, 0] is y0."""
+    n_paths, n_days, k = eps.shape
+    s_t = np.zeros((n_paths, k))
     S = np.empty((n_paths, n_days, k))
     for t in range(n_days):
-        s_t = s_t @ p.Phi.T + eps[:, t]
+        s_t = s_t @ Phi.T + eps[:, t]
         S[:, t] = s_t
-    dy = S @ p.V.T
+    dy = S @ V.T
     y0 = np.asarray(y0)
     return np.concatenate([np.broadcast_to(y0, (n_paths, 1, y0.size)), y0 + np.cumsum(dy, axis=1)], axis=1)
 
-# ---- M4 validation helpers (not needed for M2, except theory_check) ----
-# fit on <= FIT_END, simulate from the curve at FIT_END, compare with later data
-
-def horizon_quantiles(curves: np.ndarray, h: int = N_DAYS, qs=(0.05, 0.25, 0.5, 0.75, 0.95), maturities = ("1Y", "2Y", "5Y", "10Y", "20Y", "30Y")) -> pd.DataFrame:
-    """Check 1 (simulated side): quantiles of curves[:, h] - curves[:, 0] per maturity."""
-    change = curves[:, h] - curves[:, 0]
-    quantiles = np.quantile(change, qs, axis = 0)
-    return pd.DataFrame(index = qs, columns = maturities, data = quantiles)
-
-
-def realised_changes(levels: pd.DataFrame, h: int = N_DAYS) -> pd.DataFrame:
-    """Check 1 (realised side): overlapping h-day changes levels.shift(-h) - levels, dropna."""
-    return (levels.shift(-h) - levels).dropna()
-
-
-def coverage(sim_changes: np.ndarray, realised: pd.DataFrame, lo: float = 0.05, hi: float = 0.95) -> pd.Series:
-    """Check 2: per maturity, fraction of realised changes inside the simulated [lo, hi] band."""
-    lows = np.quantile(sim_changes, lo, axis = 0)
-    highs = np.quantile(sim_changes, hi, axis = 0)
-    vals = realised.values
-    counts = np.mean(((vals >= lows) & (vals <= highs)),axis = 0)
-    return pd.Series(counts, index = realised.columns, name = "coverage")
-
-
-def daily_moments(daily_changes: np.ndarray) -> dict:
-    """Check 3: std, excess kurtosis and correlation matrix of daily changes. Call on simulated and on actual."""
-    std = daily_changes.std(axis = 0)
-    excess_kurt = stats.kurtosis(daily_changes, axis = 0)
-    cor = np.corrcoef(daily_changes, rowvar = False)
-    return {
-        "std": std,
-        "excess_kurt": excess_kurt,
-        "corr_matrix": cor
-    }
+# ---- var1 theory check: simulated moments against the VAR(1) closed form (the generic checks live in validation.py) ----
 
 def theory_check(p: Params, curves: np.ndarray, h: int = 5) -> pd.DataFrame:
     """Check 4: simulated mean/variance of the factor state after h days vs the VAR(1) closed form
