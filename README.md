@@ -1,5 +1,17 @@
 # Stochastic Scenario Lab
 
+![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)
+![NumPy](https://img.shields.io/badge/NumPy-013243?logo=numpy&logoColor=white)
+![pandas](https://img.shields.io/badge/pandas-150458?logo=pandas&logoColor=white)
+![SciPy](https://img.shields.io/badge/SciPy-8CAAE6?logo=scipy&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?logo=scikitlearn&logoColor=white)
+![statsmodels](https://img.shields.io/badge/statsmodels-4051B5)
+![Matplotlib](https://img.shields.io/badge/Matplotlib-11557C)
+![Jupyter](https://img.shields.io/badge/Jupyter-F37626?logo=jupyter&logoColor=white)
+![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white)
+![uv](https://img.shields.io/badge/uv-DE5FE9?logo=uv&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-planned-EE4C2C?logo=pytorch&logoColor=white)
+
 Interest-rate scenario generation and funding-risk analysis for euro-area yield curves. The aim is to ask two questions:
 
 1. **Modelling:** does a richer model (time-varying volatility, later a neural SDE) capture properties of rate dynamics that a classical linear model misses?
@@ -18,7 +30,10 @@ The roadmap is in [`stochastic_scenario_lab_roadmap.md`](stochastic_scenario_lab
 
 ## The baseline model
 
-Daily changes of the six yields are reduced to three principal components. The factor scores follow a VAR(1) with zero drift, and the residuals are independent Student-t shocks with constant volatility. Curves are rebuilt from the factors and simulated for 250 business days (about one year), 25,000 paths.
+1. Daily changes of the six yields are reduced to three principal components (factors).
+2. The factor scores follow a VAR(1) with zero drift.
+3. The residuals are independent Student-t shocks with constant volatility.
+4. Curves are rebuilt from the factors and simulated for 250 business days (about one year), 25,000 paths.
 
 ## Findings so far
 
@@ -32,11 +47,24 @@ Daily changes of the six yields are reduced to three principal components. The f
 
 Duration matching removes most of the funding risk; what remains comes from slope and curvature moves.
 
-**Validation (var1).** The simulated 250-day change distribution is compared with realised changes: one fit up to 2018 and tested afterwards, and an expanding window with origins at every year-end 2012 to 2022. Main result: constant volatility is the weak point. Bands are far too wide in calm years (2012 to 2019) and too narrow when the 2022 rate hikes arrive, so pooled coverage (about 0.83 to 0.90 for a nominal 0.90) hides a regime pattern. Simulated daily volatility is 1.5 to 3 times too high at the short end in calm years and about half of the realised level in 2022 and 2023. This motivates the GARCH model. Details and plots are in `notebooks/var1/03_validation.ipynb`.
+**Validation (var1).** The simulated 250-day change distribution is compared with realised changes: one fit up to 2018 and tested afterwards, and an expanding window with origins at every year-end 2012 to 2022. Details and plots: `notebooks/var1/03_validation.ipynb`.
 
-**GARCH volatility.** One GARCH(1,1) with Student-t shocks per factor removes the volatility clustering in the daily residuals and improves daily-std calibration modestly, but does not improve 250-day coverage (mean |coverage - nominal| for the 5-95% band: 0.193 against 0.185 for the constant-volatility model). The horizon gap is mostly a trending effect: the 250-day variance ratio is 5.7 at 1Y and 2.5 at 2Y in the data against about 1.1 in both models. Longer VAR lags and an ARMA(1,1) drift (exploratory, `notebooks/scratch/`) do not close it, and the same pattern appears on the longer German (Bundesbank) history. Details in `notebooks/garch/03_validation.ipynb`; all models are compared with one workflow in `notebooks/model_comparison.ipynb`.
+- Constant volatility is the weak point: bands are far too wide in calm years (2012 to 2019) and too narrow when the 2022 rate hikes arrive.
+- Pooled coverage (about 0.83 to 0.90 for a nominal 0.90) hides this regime pattern.
+- Simulated daily volatility is 1.5 to 3 times too high at the short end in calm years, and about half the realised level in 2022 and 2023.
+- This motivates the GARCH model.
 
-**Caveats.** There are only about 7 to 11 independent years behind each coverage number, because 250-day windows overlap. The modelling choices (3 factors, zero drift, VAR(1), Student-t) were made after looking at the full sample, so the validation is not strictly clean.
+**GARCH volatility.** One GARCH(1,1) with Student-t shocks per factor. Details: `notebooks/garch/03_validation.ipynb`; all models side by side: `notebooks/model_comparison.ipynb`.
+
+- It removes the volatility clustering in the daily residuals and modestly improves daily-std calibration.
+- It does not improve 250-day coverage: mean |coverage - nominal| for the 5-95% band is 0.193, against 0.185 for constant volatility.
+- The remaining gap is mostly trending: the 250-day variance ratio is 5.7 at 1Y and 2.5 at 2Y in the data, against about 1.1 in both models.
+- Longer VAR lags and an ARMA(1,1) drift (exploratory, `notebooks/scratch/`) do not close it, and the same pattern appears on the longer German history.
+
+**Caveats.**
+
+- Only about 7 to 11 independent years stand behind each coverage number, because 250-day windows overlap.
+- The modelling choices (3 factors, zero drift, VAR(1), Student-t) were made after looking at the full sample, so the validation is not strictly clean.
 
 ## Repository layout
 
@@ -73,7 +101,7 @@ tests/                              interface, GARCH recovery and validation tes
 
 ## Comparing models
 
-Every model is a `fit(changes)` / `simulate(params, y0, n_paths, n_days, seed)` pair registered in `scenario_lab.models.MODELS`. `notebooks/model_comparison.ipynb` runs the same validation code (same data, origins, seeds and path counts, fit on data up to each origin only) for every registered model and reports one summary table. A new model, such as the M5 neural SDE, has to implement the two functions and be added to `MODELS`; nothing else changes.
+Every model is a `fit(changes)` / `simulate(params, y0, n_paths, n_days, seed)` pair registered in `scenario_lab.models.MODELS`. `notebooks/model_comparison.ipynb` runs the same validation code (same data, origins, seeds and path counts, fit on data up to each origin only) for every registered model and reports one summary table. A new model, such as the neural SDE, only has to implement the two functions and be added to `MODELS`.
 
 ## Setup
 
